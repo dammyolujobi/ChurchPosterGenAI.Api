@@ -1,3 +1,4 @@
+using ChurchPosterGenAI.Api.Controllers;
 using ChurchPosterGenAI.Api.Data;
 using ChurchPosterGenAI.Api.Services;
 using Microsoft.EntityFrameworkCore;
@@ -18,18 +19,27 @@ builder.Services.AddHttpClient("OpenAI", client =>
         new AuthenticationHeaderValue("Bearer", apiKey);
 });
 
+
 builder.Services.AddScoped<ITemplateService, TemplateService>();
 builder.Services.AddScoped<IGenerationService, GenerationService>();
 builder.Services.AddScoped<IAIImageService, AIImageService>();
 builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
-
+builder.Services.AddScoped<MongoService>();
+builder.Services.AddScoped<PosterClassifierService>();
+builder.Services.AddScoped<FileUploaderService>();
 builder.Services.AddHttpContextAccessor();
-
+builder.Services.AddScoped<BlobStorageService>();
+builder.Services.AddScoped<ImageGeneratorController>();
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-
+builder.Services.AddSwaggerGen();
 var app = builder.Build();
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json","ChurchPoster");
+});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
