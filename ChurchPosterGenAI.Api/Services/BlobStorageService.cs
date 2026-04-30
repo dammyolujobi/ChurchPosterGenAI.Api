@@ -1,7 +1,6 @@
 ﻿using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Microsoft.AspNetCore.Http;
-using ZstdSharp.Unsafe;
-using ChurchPosterGenAI.Api.Services;
 
 namespace ChurchPosterGenAI.Api.Services
 {
@@ -13,25 +12,70 @@ namespace ChurchPosterGenAI.Api.Services
         public BlobStorageService(IConfiguration configuration)
         {
             // This grabs the connection string you put in your secrets.json / appsettings
-            string connectionString = configuration["AzureBlob:ConnectionString"] ?? throw new Exception("Connection String not found");
+            string connectionString = configuration["AzureBlob:ConnectionString"] ?? throw new Exception("Connection Not Found");
             _blobServiceClient = new BlobServiceClient(connectionString);
-        
         }
 
-        public async Task<string> UploadImageAsync(IFormFile image, string category)
+        public async Task<string> UploadImageAsync(
+            IFormFile image,
+            string category)
         {
-            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
+            using var stream = image.OpenReadStream();
 
-            // Format category for the virtual folder (e.g., "Sunday Service" -> "sunday-service")
-            string folderName = category.ToLower().Replace(" ", "-");
-            string uniqueBlobName = $"{folderName}/{Guid.NewGuid()}-{image.FileName}";
+            return await UploadStreamAsync(
+                stream,
+                image.FileName,
+                category,
+                image.ContentType);
+        }
 
-            var blobClient = containerClient.GetBlobClient(uniqueBlobName);
+        public async Task<string> UploadBytesAsync(
+            byte[] bytes,
+            string fileName,
+            string category,
+            string contentType)
+        {
+            using var stream =
+                new MemoryStream(bytes);
 
-            using (var stream = image.OpenReadStream())
-            {
-                await blobClient.UploadAsync(stream, overwrite: true);
-            }
+            return await UploadStreamAsync(
+                stream,
+                fileName,
+                category,
+                contentType);
+        }
+
+        private async Task<string> UploadStreamAsync(
+            Stream stream,
+            string fileName,
+            string category,
+            string contentType)
+        {
+            var container =
+                _blobServiceClient
+                .GetBlobContainerClient(_containerName);
+
+            await container.CreateIfNotExistsAsync();
+
+            var folder =
+                category.ToLower().Replace(" ", "-");
+
+            var blobName =
+                $"{folder}/{Guid.NewGuid()}-{fileName}";
+
+            var blobClient =
+                container.GetBlobClient(blobName);
+
+            await blobClient.UploadAsync(
+                stream,
+                new BlobUploadOptions
+                {
+                    HttpHeaders =
+                        new BlobHttpHeaders
+                        {
+                            ContentType = contentType
+                        }
+                });
 
             return blobClient.Uri.ToString();
         }

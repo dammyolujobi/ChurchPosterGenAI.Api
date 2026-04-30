@@ -3,20 +3,28 @@ using ChurchPosterGenAI.Api.Data;
 using ChurchPosterGenAI.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Headers;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-var connectionString = builder.Configuration.GetConnectionString("ChurchPosterDbConnectionString");
-builder.Services.AddDbContext<ChurchPosterDbContext>(options => options.UseSqlServer(connectionString));
+var connectionString =
+    builder.Configuration.GetConnectionString(
+        "ChurchPosterDbConnectionString");
 
-var apiKey = builder.Configuration["OpenAI:ApiKey"];
+builder.Services.AddDbContext<ChurchPosterDbContext>(options =>
+    options.UseSqlServer(connectionString));
 
-builder.Services.AddHttpClient("OpenAI", client =>
+var hfToken = builder.Configuration["HuggingFace:Token"];
+
+builder.Services.AddHttpClient("HuggingFace", client =>
 {
-    client.BaseAddress = new Uri("https://api.openai.com/v1/");
+    client.BaseAddress =
+        new Uri("https://api-inference.huggingface.co/models/");
+
     client.DefaultRequestHeaders.Authorization =
-        new AuthenticationHeaderValue("Bearer", apiKey);
+        new AuthenticationHeaderValue("Bearer", hfToken);
+
+    client.Timeout = TimeSpan.FromMinutes(3);
 });
 
 
@@ -28,12 +36,17 @@ builder.Services.AddScoped<MongoService>();
 builder.Services.AddScoped<PosterClassifierService>();
 builder.Services.AddScoped<FileUploaderService>();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<BlobStorageService>();
-builder.Services.AddScoped<ImageGeneratorController>();
-builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters
+            .Add(new JsonStringEnumConverter());
+    });
+
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI(options =>
@@ -41,18 +54,15 @@ app.UseSwaggerUI(options =>
     options.SwaggerEndpoint("/swagger/v1/swagger.json","ChurchPoster");
 });
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
- 
-app.UseStaticFiles();
-
 app.MapControllers();
 
 app.Run();
